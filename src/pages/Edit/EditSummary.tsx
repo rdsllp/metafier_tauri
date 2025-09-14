@@ -1,6 +1,10 @@
-import { Box, Button, Tooltip, Typography, TextField } from "@mui/material";
+import { Box, Button, Typography } from "@mui/material";
 import { DolbySelect } from "../../components";
-import { DolbyMenuItem, DolbyAutocomplete, DolbyTooltip } from "../../components";
+import {
+  DolbyMenuItem,
+  DolbyAutocomplete,
+  DolbyTooltip,
+} from "../../components";
 
 interface IEditSummaryProps {
   fileName: string;
@@ -10,7 +14,7 @@ interface IEditSummaryProps {
 }
 
 const EditSummary = (props: IEditSummaryProps) => {
-  const {fileName, data, originData, setData} = props;
+  const { fileName, data, originData, setData } = props;
   const handleChange = (e: any, key: string) => {
     setData((prev: any) => ({
       ...prev,
@@ -18,20 +22,20 @@ const EditSummary = (props: IEditSummaryProps) => {
         ...prev[key],
         value: e.target.value,
       },
-    }))
-  }
+    }));
+  };
   const handleReset = () => {
     setData(originData);
-  }
-  const handleAutocompleteChange = (e: any, key: string, value: any) => {
+  };
+  const handleAutocompleteChange = (_e: any, key: string, value: any) => {
     setData((prev: any) => ({
       ...prev,
       [key]: {
         ...prev[key],
         value: value,
       },
-    }))
-  }
+    }));
+  };
   return (
     <Box className="m-[20px] w-1/2 flex flex-col">
       <div>
@@ -62,18 +66,28 @@ const EditSummary = (props: IEditSummaryProps) => {
         </DolbyTooltip>
       </div>
 
-      <Box className="flex flex-col relative mb-[10px] border-[1px] rounded border-gray-300 grow py-[20px] overflow-y-auto 
-          text-[16px] xl:text-[20px] min-[1900px]:text-[24px]" 
-        sx={{fontFamily: '"Roboto","Helvetica","Arial",sans-serif'}}>
+      <Box
+        className="flex flex-col relative mb-[10px] border-[1px] rounded border-gray-300 grow py-[20px] overflow-y-auto
+          text-[16px] xl:text-[20px] min-[1900px]:text-[24px]"
+        sx={{ fontFamily: '"Roboto","Helvetica","Arial",sans-serif' }}
+      >
         {Object.keys(data).map((key: string, idx: number) => (
           <Box key={idx} className="flex w-full text-white ">
-            {
-              data[key].type >= 0 &&
+            {data[key].type >= 0 && (
               <Box className="px-[8px] py-[4px] w-[46%] text-right">
-                <Typography variant="inherit" className={data[key].value != originData[key].value ? "text-[#1b6ef3] italic": ""}>{key}</Typography>
+                <Typography
+                  variant="inherit"
+                  className={
+                    data[key].value != originData[key].value
+                      ? "text-[#1b6ef3] italic"
+                      : ""
+                  }
+                >
+                  {key}
+                </Typography>
               </Box>
-            }
-            
+            )}
+
             {data[key].type === 0 && (
               <Box className="px-[8px] py-[4px]">
                 <Typography variant="inherit">{data[key].value}</Typography>
@@ -89,51 +103,51 @@ const EditSummary = (props: IEditSummaryProps) => {
                 onChange={(e) => handleChange(e, key)}
               />
             )}
-            {data[key].type === 2 && (
-                key == "Mastering Monitor" ? (
-                  data[key].value != originData[key].value ? (
-                    <DolbyTooltip placement="top" arrow 
-                      title={
-                        <span>
-                          <u><em>Caution:</em></u>
-                          Changing the Mastering Monitor inside an XML is not recommended, except in very special cases.
-                        </span>
-                      }>
-                      <DolbySelect
-                      className="bg-transparent ml-[7px] border-[1px] my-[3px] px-[3px] rounded w-[40%] "
-                        value={data[key].value}
-                        onChange={(e) => handleChange(e, key)}
-                        sx={{ padding: "0" }}
-                      >
-                      {
-                        data[key].list.map((item: any) => (
-                          <DolbyMenuItem key={item.value} value={item.value}>
-                            {item.text} 
-                            (<span>ID ({item.value})</span>)
-                          </DolbyMenuItem>
-                        ))
-                      }
-                      </DolbySelect>
-                    </DolbyTooltip>
-                  ) : (
+            {data[key].type === 2 &&
+              (key == "Mastering Monitor" ? (
+                data[key].value != originData[key].value ? (
+                  <DolbyTooltip
+                    placement="top"
+                    arrow
+                    title={
+                      <span>
+                        <u>
+                          <em>Caution:</em>
+                        </u>
+                        Changing the Mastering Monitor inside an XML is not
+                        recommended, except in very special cases.
+                      </span>
+                    }
+                  >
                     <DolbySelect
                       className="bg-transparent ml-[7px] border-[1px] my-[3px] px-[3px] rounded w-[40%] "
                       value={data[key].value}
                       onChange={(e) => handleChange(e, key)}
-                      size="small"
                       sx={{ padding: "0" }}
                     >
-                    {
-                      data[key].list.map((item: any) => (
+                      {data[key].list.map((item: any) => (
                         <DolbyMenuItem key={item.value} value={item.value}>
-                          {item.text} 
-                          (<span>ID ({item.value})</span>)
+                          {item.text}(<span>ID ({item.value})</span>)
                         </DolbyMenuItem>
-                      ))
-                    }
+                      ))}
                     </DolbySelect>
-                  )
+                  </DolbyTooltip>
                 ) : (
+                  <DolbySelect
+                    className="bg-transparent ml-[7px] border-[1px] my-[3px] px-[3px] rounded w-[40%] "
+                    value={data[key].value}
+                    onChange={(e) => handleChange(e, key)}
+                    size="small"
+                    sx={{ padding: "0" }}
+                  >
+                    {data[key].list.map((item: any) => (
+                      <DolbyMenuItem key={item.value} value={item.value}>
+                        {item.text}(<span>ID ({item.value})</span>)
+                      </DolbyMenuItem>
+                    ))}
+                  </DolbySelect>
+                )
+              ) : (
                 <DolbySelect
                   className="bg-transparent ml-[7px] border-[1px] my-[3px] px-[3px] rounded [w-40%]"
                   value={data[key].value}
@@ -141,55 +155,50 @@ const EditSummary = (props: IEditSummaryProps) => {
                   size="small"
                   sx={{ padding: "0" }}
                 >
-                  {
-                    data[key].list.map((item: any) => (
-                      <DolbyMenuItem key={item.value} value={item.value}>
-                        {item.text} 
-                      </DolbyMenuItem>
-                    ))
-                  }
+                  {data[key].list.map((item: any) => (
+                    <DolbyMenuItem key={item.value} value={item.value}>
+                      {item.text}
+                    </DolbyMenuItem>
+                  ))}
                 </DolbySelect>
-                )
-            )}
-            {
-            data[key].type === 3 && ( // For frame rate
+              ))}
+            {data[key].type === 3 && ( // For frame rate
               <DolbyAutocomplete
                 freeSolo
                 value={data[key].value}
                 onChange={(e, value) => handleAutocompleteChange(e, key, value)}
                 options={data[key].list.map((option: any) => option.value)}
-                getOptionLabel={(option: string) => option}
-                renderInput={(params) => 
+                getOptionLabel={(option) => option as string}
+                renderInput={(params) => (
                   <div ref={params.InputProps.ref}>
                     <input
                       {...params.inputProps}
                       className="bg-transparent ml-[7px] border-[1px] my-[3px] px-[3px] focus:outline-none focus:ring focus:border-blue-300 rounded w-[40%]"
                       required
-                    /> 
+                    />
                   </div>
-                  }
-                renderOption={(props: any, option: string) => (
-                  <DolbyMenuItem {...props}>
-                    {option} fps 
-                  </DolbyMenuItem>
                 )}
-                />
-              )
-            
-            }
+                renderOption={(props: any, option: any) => (
+                  <DolbyMenuItem {...props}>{option} fps</DolbyMenuItem>
+                )}
+              />
+            )}
           </Box>
         ))}
 
-        <Button variant="contained" size="small" 
+        <Button
+          variant="contained"
+          size="small"
           sx={{
-            borderRadius: 0, 
-            backgroundColor: 'rgba(255, 255, 255, 0.38)',
-            position: 'absolute',
+            borderRadius: 0,
+            backgroundColor: "rgba(255, 255, 255, 0.38)",
+            position: "absolute",
             bottom: 2,
             right: 2,
-            }} 
-          onClick={handleReset}>
-            Reset Values
+          }}
+          onClick={handleReset}
+        >
+          Reset Values
         </Button>
       </Box>
     </Box>

@@ -1,4 +1,4 @@
-import React, { useRef } from "react";
+import { useRef } from "react";
 import { createTheme, ThemeProvider, Snackbar, Alert } from "@mui/material";
 import { HashRouter as Router, Route, Routes } from "react-router-dom";
 import { Edit } from "./pages/Edit";
@@ -36,7 +36,7 @@ const App = () => {
   };
   const callValidate = () => {
     if (validationRef.current) {
-      validationRef.current.handleValidate();
+      (validationRef.current as unknown as any).handleValidate();
     }
   };
   return (

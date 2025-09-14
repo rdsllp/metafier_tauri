@@ -15,13 +15,12 @@ import React, { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 
 import logo from "../../assets/logo_1.png";
-import { channels } from "../../shared/constants";
 import {
   setXmlData,
   setTrimList,
   setPageLoading,
 } from "../../redux/slices/xmlSlice";
-import { useAppDispatch, useAppSelector } from "../../redux/store";
+import { useAppDispatch } from "../../redux/store";
 import { showNotification } from "../../redux/slices/notificationSlice";
 import { TauriApi } from "../../shared/tauriApi";
 
@@ -32,7 +31,7 @@ const menus = [
 interface HeaderProps {
   callValidate: () => void;
 }
-export const Header = (props: HeaderProps) => {
+export const Header = (_props: HeaderProps) => {
   const [value, setValue] = useState<String>("1");
   const [anchorEl, setAnchorEl] = useState<null | HTMLDivElement>(null);
   const [isDefaultPath, setIsDefaultPath] = useState<boolean>(false);

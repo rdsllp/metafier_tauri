@@ -2,13 +2,12 @@ import * as React from "react";
 import Dialog from "@mui/material/Dialog";
 import CloseIcon from "@mui/icons-material/Close";
 import {
-  Box,
   Typography,
   DialogTitle,
   IconButton,
   DialogContent,
 } from "@mui/material";
-import { formattedLog } from '../ReportConsole';
+import { formattedLog } from "../ReportConsole";
 
 interface DialogProps {
   open: boolean;
@@ -18,7 +17,7 @@ interface DialogProps {
 
 export function ReportDialog(props: DialogProps) {
   const { open, setOpen, logList } = props;
-  const [fullWidth, setFullWidth] = React.useState(true);
+  const [fullWidth] = React.useState(true);
   const handleClose = () => {
     setOpen(false);
   };

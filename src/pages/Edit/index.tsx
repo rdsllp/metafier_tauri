@@ -12,7 +12,7 @@ import { ReportConsole, DolbyCheckbox } from "../../components";
 import { useAppSelector, useAppDispatch } from "../../redux/store";
 import { extractSummaryInfo } from "../../shared/utils";
 import { showNotification } from "../../redux/slices/notificationSlice";
-import { channels, optionList, summaryKeys } from "../../shared/constants";
+import { optionList, summaryKeys } from "../../shared/constants";
 import { TauriApi } from "../../shared/tauriApi";
 
 const emptyString = "______________";
@@ -381,7 +381,7 @@ export const Edit = () => {
               <DolbyCheckbox
                 size="small"
                 value={bRunValidation}
-                onChange={(e) => setBRunValidation(!bRunValidation)}
+                onChange={() => setBRunValidation(!bRunValidation)}
               />
               <Typography variant="body1" className="text-white">
                 Run Validation after Export

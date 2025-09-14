@@ -5,12 +5,10 @@ import {
   Button,
   Grid2,
   Typography,
-  styled,
   CircularProgress,
 } from "@mui/material";
 import Summary from "./Summary";
 import ValidationTest from "./ValidationTest";
-import { channels } from "../../shared/constants";
 import {
   DolbyCheckbox,
   DolbyMenuItem,
@@ -22,7 +20,7 @@ import { useAppDispatch, useAppSelector } from "../../redux/store";
 import { showNotification } from "../../redux/slices/notificationSlice";
 import { TauriApi } from "../../shared/tauriApi";
 
-export const Validate = forwardRef((props, ref) => {
+export const Validate = forwardRef((_props, ref) => {
   const [liftChecked, setLiftChecked] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(false);
   const [dlgOpen, setDlgOpen] = useState<boolean>(false);
@@ -38,7 +36,7 @@ export const Validate = forwardRef((props, ref) => {
   useImperativeHandle(ref, () => ({
     handleValidate,
   }));
-  const handleExport = async (event: React.MouseEvent<HTMLButtonElement>) => {
+  const handleExport = async (_event: React.MouseEvent<HTMLButtonElement>) => {
     if (validationLog) {
       try {
         const result = await TauriApi.exportLogs(validationLog);
@@ -63,7 +61,9 @@ export const Validate = forwardRef((props, ref) => {
       );
     }
   };
-  const handleValidate = async (event: React.MouseEvent<HTMLButtonElement>) => {
+  const handleValidate = async (
+    _event: React.MouseEvent<HTMLButtonElement>
+  ) => {
     setValidationLog("pending");
     setLoading(true);
     let type = 0; // 0 - withoutLift, 1 - withLift 0, 2 - withLift 0.025
@@ -140,7 +140,7 @@ export const Validate = forwardRef((props, ref) => {
                       <DolbyCheckbox
                         size="small"
                         value={liftChecked}
-                        onChange={(e) => setLiftChecked(!liftChecked)}
+                        onChange={(_e) => setLiftChecked(!liftChecked)}
                       />
                       <Typography variant="body1" className="text-white">
                         Positive Lift Threshold
