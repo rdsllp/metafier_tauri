@@ -1,0 +1,393 @@
+import { app, BrowserWindow, dialog, ipcMain } from "electron";
+import * as fs from "fs";
+import * as path from "path";
+import { spawn, execSync } from "child_process";
+import { channels, summaryKeys } from "./shared/constants";
+import * as os from "os";
+
+declare const MAIN_WINDOW_WEBPACK_ENTRY: string;
+declare const MAIN_WINDOW_PRELOAD_WEBPACK_ENTRY: string;
+// Handle creating/removing shortcuts on Windows when installing/uninstalling.
+if (require("electron-squirrel-startup")) {
+  app.quit();
+}
+let mainWindow: BrowserWindow | null = null;
+let loadedFile: string = "";
+let defaultPath: string = "";
+const configPath = path.join(app.getPath("userData"), "config.json");
+const defaultMetafierPath =
+  os.platform() === "win32"
+    ? "C:\\Program Files\\Dolby\\Dolby_Vision_Professional_Tools_v5.5.0\\metafier.exe"
+    : "/usr/local/bin/dolby_vision_professional_tools/metafier";
+
+const saveMetafierPath = (filePath: string) => {
+  fs.writeFileSync(
+    configPath,
+    JSON.stringify({ metafierPath: filePath }, null, 2)
+  );
+};
+
+const loadMetafierPathByOs = (): string => {
+  if (os.platform() === "win32") {
+    const programFilesPath = "C:\\Program Files\\Dolby\\";
+    const filesInProgramFiles = fs.readdirSync(programFilesPath);
+    const dolbyVisionProfessionalTools = filesInProgramFiles.find((file) =>
+      file.toLowerCase().includes("dolby_vision_professional_tools")
+    );
+    if (dolbyVisionProfessionalTools) {
+      return path.join(
+        programFilesPath,
+        dolbyVisionProfessionalTools,
+        "metafier.exe"
+      );
+    }
+    return defaultMetafierPath;
+  } else {
+    return "/usr/local/bin/dolby_vision_professional_tools/metafier";
+  }
+};
+
+const loadMetafierPath = (): string | null => {
+  if (fs.existsSync(configPath)) {
+    const config = JSON.parse(fs.readFileSync(configPath, "utf-8"));
+    return config.metafierPath || null;
+  } else {
+    return loadMetafierPathByOs();
+  }
+};
+
+const createWindow = (): void => {
+  // Create the browser window.
+  mainWindow = new BrowserWindow({
+    height: 730,
+    width: 1280,
+    resizable: true,
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true,
+      preload: MAIN_WINDOW_PRELOAD_WEBPACK_ENTRY,
+      devTools: !app.isPackaged,
+    },
+    autoHideMenuBar: true,
+  });
+
+  // and load the index.html of the app.
+  mainWindow.loadURL(MAIN_WINDOW_WEBPACK_ENTRY);
+  // Alow drag and drop on an electron window
+  mainWindow.webContents.setWindowOpenHandler(() => {
+    return { action: "deny" };
+  });
+  mainWindow.webContents.on("before-input-event", (event, input) => {
+    if (
+      (input.control || input.meta) &&
+      input.shift &&
+      input.key.toLowerCase() === "i"
+    ) {
+      event.preventDefault();
+    }
+    if (input.control && input.key.toLowerCase() === "r") {
+      event.preventDefault();
+    }
+    if (input.key === "F12") {
+      event.preventDefault();
+    }
+  });
+
+  mainWindow.webContents.on("will-navigate", (event) => {
+    event.preventDefault();
+  });
+
+  mainWindow.webContents.session.on("will-download", (event) => {
+    event.preventDefault();
+  });
+
+  mainWindow.setMenuBarVisibility(false);
+};
+
+const runCommand = async (args: string[]): Promise<any> => {
+  return new Promise((resolve, reject) => {
+    const metafierPath = loadMetafierPath();
+    const process = spawn(metafierPath, args);
+    let stdout = "";
+    let stderr = "";
+    process.stdout.on("data", (data) => {
+      stdout += data.toString();
+    });
+    process.stderr.on("data", (data) => {
+      stderr += data.toString();
+    });
+    process.on("error", (err) => {
+      console.log("error", err);
+      resolve({ success: false, msg: err.toString().replace(/^.*\n/, "") });
+    });
+    process.on("close", (code) => {
+      console.log("close", code);
+      if (code != 0) {
+        dialog.showMessageBox(mainWindow!, {
+          type: "info",
+          title: "Alert",
+          message:
+            "An error occured. Please check metafier path or XML/MXF file.",
+          buttons: ["OK"],
+        });
+        resolve({ success: false, msg: "" });
+      } else {
+        resolve({ success: true, msg: stdout + stderr });
+      }
+    });
+  });
+};
+
+const saveNewFile = async (
+  filePath: string,
+  params: string,
+  bValidation: boolean
+) => {
+  let args = [`${loadedFile}`, "--output", `${filePath}`, ...params];
+  let output = await runCommand(args);
+
+  if (bValidation) {
+    if (!output.success) return output.msg;
+
+    const args1 = ["--validate", `${filePath}`];
+    output = await runCommand(args1);
+  }
+  return output.msg;
+};
+
+const analyzeLogs = (output: string) => {
+  let response: any = {
+    xmlData: {},
+    trimList: {
+      L2: [],
+      L8: [],
+    },
+  };
+  let outputs = output.split("\n");
+  outputs.forEach((line) => {
+    if (line.indexOf("L2 Trim Count") >= 0) {
+      response.trimList.L2 = line
+        .match(/\((\d+),/g)
+        .map((item) => item.match(/\d+/)[0]);
+    }
+    if (line.indexOf("L8 Trim Count") >= 0) {
+      response.trimList.L8 = line
+        .match(/\((\d+),/g)
+        .map((item) => item.match(/\d+/)[0]);
+    }
+    if (line.indexOf("Metadata version:") >= 0) {
+      response.xmlData[summaryKeys.XML_VERSION] =
+        line.match(/(\d+\.\d+\.\d+)/)[0];
+    }
+    if (line.indexOf("Level254 CMVersion:") >= 0) {
+      response.xmlData[summaryKeys.LEVEL_254_CM_VERSION] = line.replace(
+        /Level254 CMVersion:\s*/,
+        ""
+      );
+    }
+    if (line.indexOf("Aspect Ratios (Canvas - Image):") >= 0) {
+      const values = line.match(/.*?(\d+(\.\d+)?) - (\d+(\.\d+)?)/) || [];
+      if (values.length > 3) {
+        response.xmlData[summaryKeys.ASPECT_RATIO_CANVAS] = values[1];
+        const roundedValue = Math.floor(parseFloat(values[3]) * 100) / 100;
+        response.xmlData[summaryKeys.ASPECT_RATIO_IMAGE] =
+          roundedValue.toFixed(2);
+      }
+    }
+    if (line.indexOf("Frame Rate:") >= 0) {
+      response.xmlData[summaryKeys.FRAME_RATE] = parseFloat(
+        line.match(/(\d+(\.\d+)?)fps/)[1]
+      ).toFixed(2);
+    }
+    if (line.indexOf("Mastering Monitor:") >= 0) {
+      response.xmlData[summaryKeys.MASTERING_MONITOR] =
+        line.match(/\(ID\s*(\d+)\)/)[1];
+    }
+    if (line.indexOf("Level6 (MaxFALL - MaxCLL):") >= 0) {
+      const values = line.match(/(\d+(\.\d+)?)\s*-\s*(\d+(\.\d+)?)/);
+      response.xmlData[summaryKeys.LEVEL_6_MAX_FALL] = values[1];
+      response.xmlData[summaryKeys.LEVEL_6_MAX_CLL] = values[3];
+    }
+    if (line.indexOf("Color Encoding:") >= 0) {
+      const values = line.match(
+        /(pq\(\d+(\.\d+)?,\d+(\.\d+)?\))\s(\w+)\s(\w+)\s(\w+)/
+      );
+      response.xmlData[summaryKeys.COLOR_PRIMARIES] = values[6];
+      // response.xmlData[summaryKeys.COLOR_PRIMARIES] = `pq(${values[1]}, ${values[2]})`;
+      response.xmlData[summaryKeys.WHITE_POINT] = "D65";
+      response.xmlData[summaryKeys.COLOR_SPACE] = values[4];
+      response.xmlData[summaryKeys.EOTF] = "pq";
+      response.xmlData[summaryKeys.SIGNAL_RANGE] = values[5];
+    }
+  });
+  return response;
+};
+/* Validate XML */
+ipcMain.handle(channels.FUNC_VALIDATE_XML, async (event, data) => {
+  let args: string[] = [];
+  if (data == 0) args = ["--validate", `${loadedFile}`];
+  if (data == 1) args = ["--validate", `${loadedFile}`];
+  if (data == 2) args = ["--validate", "--with-lift", `${loadedFile}`];
+  let output = await runCommand(args);
+  return output.msg;
+});
+
+/* Validate and Get trim list after a file is loaded */
+ipcMain.handle(channels.FUNC_GET_TRIM_LIST, async (event, fpath) => {
+  try {
+    let args = ["--validate", `${fpath}`];
+    console.log(args);
+    loadedFile = fpath; // Update loaded file
+    let output = await runCommand(args);
+    //Analyze output
+    let response = analyzeLogs(output.msg);
+    console.log("response", response);
+    return response;
+  } catch (e) {
+    console.log(e);
+    return null;
+  }
+});
+/* Export Logs */
+ipcMain.handle(channels.FUNC_EXPORT_LOGS, async (event, logs) => {
+  // Show save dialog
+  if (defaultPath.length === 0) defaultPath = app.getPath("documents");
+  const fpath = path.basename(loadedFile);
+  const date = new Date();
+  const formattedDate = `${date.getFullYear()}_${String(
+    date.getMonth() + 1
+  ).padStart(2, "0")}_${String(date.getDate()).padStart(2, "0")}`;
+  const saveName = `${fpath.slice(
+    0,
+    fpath.lastIndexOf(".")
+  )}_Mtfr_rprt_${formattedDate}.txt`;
+  const result = await dialog.showSaveDialog({
+    title: "Export Logs",
+    defaultPath: path.join(defaultPath, saveName),
+    buttonLabel: "Save",
+    filters: [
+      { name: "Text Files", extensions: ["txt"] },
+      { name: "All Files", extensions: ["*"] },
+    ],
+  });
+
+  if (result.canceled) {
+    return false;
+  } else {
+    defaultPath = path.dirname(result.filePath);
+    try {
+      fs.writeFileSync(result.filePath, logs);
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+});
+/* Save as a new XML */
+ipcMain.handle(
+  channels.FUNC_SAVE_AS_NEW_XML,
+  async (event, params, bValidation) => {
+    // Show save dialog
+    if (defaultPath.length === 0) defaultPath = app.getPath("documents");
+    const fpath = path.basename(loadedFile);
+    const saveName = `${fpath.slice(0, fpath.lastIndexOf("."))}_edited.xml`;
+    const result = await dialog.showSaveDialog({
+      title: "Save as a new XML",
+      defaultPath: path.join(defaultPath, saveName),
+      buttonLabel: "Save",
+      filters: [
+        { name: "XML Files", extensions: ["xml"] },
+        { name: "All Files", extensions: ["*"] },
+      ],
+    });
+    if (result.canceled) {
+      return false;
+    } else {
+      defaultPath = path.dirname(result.filePath);
+      return await saveNewFile(result.filePath, params, bValidation);
+    }
+  }
+);
+ipcMain.handle(channels.FUNC_GET_METAFIER_PATH, async (event) => {
+  const path = loadMetafierPath();
+  return path;
+});
+ipcMain.handle(channels.CHECK_DEFAULT_PATH, async (event) => {
+  const path = loadMetafierPath();
+  if (path === defaultMetafierPath) {
+    //Check if cm_analyze is working
+    try {
+      const stdout = execSync(`"${path}" --version`, { encoding: "utf-8" });
+      console.log(stdout);
+      if (stdout.includes("Metafier application")) {
+        return true;
+      } else return false;
+    } catch (error) {
+      return false;
+    }
+  }
+  return false;
+});
+/* Open Metafier Dialog */
+ipcMain.handle(channels.FUNC_SET_METAFIER_PATH, async (event) => {
+  const result = await dialog.showOpenDialog(mainWindow!, {
+    properties: ["openFile"],
+  });
+  if (!result.canceled && result.filePaths.length > 0) {
+    loadedFile = result.filePaths[0];
+    const filePath = result.filePaths[0];
+
+    const response = {
+      success: true,
+      filePath,
+    };
+    saveMetafierPath(filePath);
+    return response;
+  }
+  return { success: false };
+});
+
+app.on("ready", createWindow);
+
+app.on("window-all-closed", () => {
+  if (process.platform !== "darwin") {
+    app.quit();
+  }
+});
+
+app.on("before-quit", () => {
+  ipcMain.removeHandler(channels.FUNC_VALIDATE_XML);
+  ipcMain.removeHandler(channels.FUNC_EXPORT_LOGS);
+  ipcMain.removeHandler(channels.FUNC_SAVE_AS_NEW_XML);
+  ipcMain.removeHandler(channels.FUNC_GET_TRIM_LIST);
+});
+
+app.on("activate", () => {
+  if (BrowserWindow.getAllWindows().length === 0) {
+    createWindow();
+  }
+});
+//------------------------------ ipcMain -----------------------------
+/* Open XML Dialog */
+ipcMain.on(channels.OPEN_XML_DIALOG, async (event) => {
+  const result = await dialog.showOpenDialog(mainWindow!, {
+    properties: ["openFile"],
+    filters: [{ name: "XML | MXF Files", extensions: ["xml", "mxf"] }],
+  });
+  if (!result.canceled && result.filePaths.length > 0) {
+    loadedFile = result.filePaths[0];
+    const filePath = result.filePaths[0];
+
+    const response = {
+      fileName: path.basename(filePath),
+      filePath,
+    };
+    mainWindow!.webContents.send(channels.XML_FILE_CONTENT, response);
+  }
+});
+
+/* Full Screen */
+ipcMain.on("toggle-fullscreen", () => {
+  const isFullScreen = mainWindow.isFullScreen();
+  mainWindow.setFullScreen(!isFullScreen); // Toggle fullscreen
+});
