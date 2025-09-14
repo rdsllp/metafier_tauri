@@ -20,6 +20,7 @@ import {
 } from "../../components";
 import { useAppDispatch, useAppSelector } from "../../redux/store";
 import { showNotification } from "../../redux/slices/notificationSlice";
+import { TauriApi } from "../../shared/tauriApi";
 
 export const Validate = forwardRef((props, ref) => {
   const [liftChecked, setLiftChecked] = useState<boolean>(false);
@@ -39,16 +40,20 @@ export const Validate = forwardRef((props, ref) => {
   }));
   const handleExport = async (event: React.MouseEvent<HTMLButtonElement>) => {
     if (validationLog) {
-      const result = await window.electron.ipcRenderer.invoke(
-        channels.FUNC_EXPORT_LOGS,
-        validationLog
-      );
-      if (result) {
+      try {
+        const result = await TauriApi.exportLogs(validationLog);
+        if (result) {
+          dispatch(
+            showNotification({
+              message: "Logs exported successfully",
+              type: "success",
+            })
+          );
+        }
+      } catch (error) {
+        console.error("Failed to export logs:", error);
         dispatch(
-          showNotification({
-            message: "Logs exported successfully",
-            type: "success",
-          })
+          showNotification({ message: "Failed to export logs", type: "error" })
         );
       }
     } else {
@@ -67,11 +72,17 @@ export const Validate = forwardRef((props, ref) => {
     } else if (liftChecked && threshold === 0.025) {
       type = 2;
     }
-    const res = await window.electron.ipcRenderer.invoke(
-      channels.FUNC_VALIDATE_XML,
-      type
-    );
-    setValidationLog(res);
+
+    try {
+      const res = await TauriApi.validateXml(type);
+      setValidationLog(res);
+    } catch (error) {
+      console.error("Failed to validate XML:", error);
+      setValidationLog("Failed to validate XML: " + error);
+      dispatch(
+        showNotification({ message: "Validation failed", type: "error" })
+      );
+    }
 
     setLoading(false);
   };

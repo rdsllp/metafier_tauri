@@ -23,6 +23,7 @@ import {
 } from "../../redux/slices/xmlSlice";
 import { useAppDispatch, useAppSelector } from "../../redux/store";
 import { showNotification } from "../../redux/slices/notificationSlice";
+import { TauriApi } from "../../shared/tauriApi";
 
 const menus = [
   { text: "Validate", path: "/", value: "1" },
@@ -38,17 +39,17 @@ export const Header = (props: HeaderProps) => {
   const [metaPath, setMetaPath] = useState<string>("");
   const location = useLocation();
   const dispatch = useAppDispatch();
+
   const init = async () => {
-    window.electron.ipcRenderer.on(channels.XML_FILE_CONTENT, handleXMLFile);
-    const isDefaultPath = await window.electron.ipcRenderer.invoke(
-      channels.CHECK_DEFAULT_PATH
-    );
-    setIsDefaultPath(isDefaultPath);
-    if (!isDefaultPath) {
-      const path = await window.electron.ipcRenderer.invoke(
-        channels.FUNC_GET_METAFIER_PATH
-      );
-      setMetaPath(path);
+    try {
+      const isDefaultPath = await TauriApi.checkDefaultPath();
+      setIsDefaultPath(isDefaultPath);
+      if (!isDefaultPath) {
+        const path = await TauriApi.getMetafierPath();
+        setMetaPath(path);
+      }
+    } catch (error) {
+      console.error("Failed to initialize:", error);
     }
   };
   useEffect(() => {
@@ -62,8 +63,21 @@ export const Header = (props: HeaderProps) => {
       setValue("2");
     }
   }, [location]);
-  const handleLoadXML = () => {
-    window.electron.ipcRenderer.send(channels.OPEN_XML_DIALOG);
+  const handleLoadXML = async () => {
+    try {
+      const result = await TauriApi.openXmlDialog();
+      if (result) {
+        handleXMLFile(result);
+      }
+    } catch (error) {
+      console.error("Failed to open XML dialog:", error);
+      dispatch(
+        showNotification({
+          message: "Failed to open file dialog",
+          type: "error",
+        })
+      );
+    }
   };
   const handleMetaClick = (event: React.MouseEvent<HTMLDivElement>) => {
     setAnchorEl(event.currentTarget);
@@ -72,52 +86,73 @@ export const Header = (props: HeaderProps) => {
     setAnchorEl(null);
   };
   const handleMetaBrowseClick = async () => {
-    const response = await window.electron.ipcRenderer.invoke(
-      channels.FUNC_SET_METAFIER_PATH
-    );
-    if (response.success) {
-      setMetaPath(response.filePath);
-    }
-  };
-  const handleXMLFile = async (_event: any, data: any) => {
-    dispatch(setPageLoading(true));
-    const response = await window.electron.ipcRenderer.invoke(
-      channels.FUNC_GET_TRIM_LIST,
-      data.filePath
-    );
-    if (response == null) {
+    try {
+      const filePath = await TauriApi.setMetafierPathDialog();
+      if (filePath) {
+        setMetaPath(filePath);
+      }
+    } catch (error) {
+      console.error("Failed to set metafier path:", error);
       dispatch(
-        showNotification({ message: "Invalid XML file", type: "error" })
+        showNotification({
+          message: "Failed to set metafier path",
+          type: "error",
+        })
       );
-      return;
     }
-    dispatch(setPageLoading(false));
-    dispatch(setTrimList(response.trimList));
-    dispatchXmlData(response.xmlData, data.fileName);
-    // callValidate();
   };
-
-  const handleDrop = async (event: React.DragEvent<HTMLDivElement>) => {
-    event.preventDefault();
-
-    const file = event.dataTransfer.files[0];
-    const filePath = window.electron.webUtils.getPathForFile(file);
-    if (file && (file.name.endsWith(".xml") || file.name.endsWith(".mxf"))) {
-      dispatch(setPageLoading(true));
-      const data = await window.electron.ipcRenderer.invoke(
-        channels.FUNC_GET_TRIM_LIST,
-        filePath
-      );
-      if (data == null) {
+  const handleXMLFile = async (data: {
+    file_name: string;
+    file_path: string;
+  }) => {
+    dispatch(setPageLoading(true));
+    try {
+      const response = await TauriApi.getTrimList(data.file_path);
+      if (response == null) {
         dispatch(
           showNotification({ message: "Invalid XML file", type: "error" })
         );
         return;
       }
       dispatch(setPageLoading(false));
-      dispatch(setTrimList(data.trimList));
-      dispatchXmlData(data.xmlData, file.name);
-      // callValidate();
+      dispatch(setTrimList(response.trim_list));
+      dispatchXmlData(response.xml_data, data.file_name);
+    } catch (error) {
+      dispatch(setPageLoading(false));
+      console.error("Failed to process XML file:", error);
+      dispatch(
+        showNotification({
+          message: "Failed to process XML file",
+          type: "error",
+        })
+      );
+    }
+  };
+
+  const handleDrop = async (event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+
+    const files = Array.from(event.dataTransfer.files);
+    if (files.length === 0) return;
+
+    const file = files[0];
+    if (file && (file.name.endsWith(".xml") || file.name.endsWith(".mxf"))) {
+      // HTML5 drag and drop doesn't provide full file paths for security reasons
+      // Show a helpful message directing users to use the file dialog instead
+      dispatch(
+        showNotification({
+          message:
+            "Please use the 'Load XML/MXF' button to select files. Drag and drop doesn't provide full file paths in web applications.",
+          type: "info",
+        })
+      );
+    } else {
+      dispatch(
+        showNotification({
+          message: "Please drop only XML or MXF files",
+          type: "error",
+        })
+      );
     }
   };
 

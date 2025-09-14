@@ -13,6 +13,7 @@ import { useAppSelector, useAppDispatch } from "../../redux/store";
 import { extractSummaryInfo } from "../../shared/utils";
 import { showNotification } from "../../redux/slices/notificationSlice";
 import { channels, optionList, summaryKeys } from "../../shared/constants";
+import { TauriApi } from "../../shared/tauriApi";
 
 const emptyString = "______________";
 const mockXML: any = {
@@ -298,28 +299,42 @@ export const Edit = () => {
       return;
     }
     setLoading(true);
-    let output = await window.electron.ipcRenderer.invoke(
-      channels.FUNC_SAVE_AS_NEW_XML,
-      command,
-      bRunValidation
-    );
-    const success = checkIsSuccess(output);
-    setLoading(false);
-    if (bRunValidation) {
-      if (output != null) {
-        setLog(output);
+    try {
+      let output = await TauriApi.saveAsNewXml(
+        command.join(" "),
+        bRunValidation
+      );
+      const success = checkIsSuccess(output);
+      setLoading(false);
+      if (bRunValidation) {
+        if (output != null) {
+          setLog(output);
+        } else {
+          dispatch(
+            showNotification({ message: "Validation failed", type: "error" })
+          );
+        }
       } else {
-        dispatch(
-          showNotification({ message: "Validation failed", type: "error" })
-        );
+        if (!success) {
+          setLog(output);
+          dispatch(
+            showNotification({ message: "An error occured!", type: "error" })
+          );
+        } else {
+          dispatch(
+            showNotification({
+              message: "File saved successfully",
+              type: "success",
+            })
+          );
+        }
       }
-    } else {
-      if (!success) {
-        setLog(output);
-        dispatch(
-          showNotification({ message: "An error occured!", type: "error" })
-        );
-      }
+    } catch (error) {
+      setLoading(false);
+      console.error("Failed to save file:", error);
+      dispatch(
+        showNotification({ message: "Failed to save file", type: "error" })
+      );
     }
   };
 
